@@ -1,7 +1,5 @@
 # Databricks notebook source
 
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC # 🚀 Notebook 00: Setup Lakebase Project & Seed Data
 # MAGIC
