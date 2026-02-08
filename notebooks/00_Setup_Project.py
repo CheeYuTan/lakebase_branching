@@ -211,7 +211,7 @@ if endpoints:
     print(f"   Endpoint: {main_endpoint_name}")
     print(f"   Host: {main_host}")
     print(f"   Port: 5432")
-    print(f"   Database: postgres")
+    print(f"   Database: databricks_postgres")
 else:
     raise Exception("Compute endpoint not available after 5 minutes. Check the Lakebase UI for project status.")
 
@@ -224,9 +224,10 @@ else:
 # MAGIC to generate short-lived database tokens. No passwords to manage!
 # MAGIC
 # MAGIC **How it works:**
-# MAGIC 1. The SDK generates an OAuth token using `generate_database_credential`
-# MAGIC 2. We connect via `psycopg2` using the token as the password
-# MAGIC 3. Your Databricks identity is automatically mapped to a PostgreSQL role
+# MAGIC 1. When you create a project, a Postgres role for your Databricks identity is **automatically created**
+# MAGIC 2. This role owns the default `databricks_postgres` database and is a member of `databricks_superuser`
+# MAGIC 3. The SDK generates an OAuth token using `generate_database_credential`
+# MAGIC 4. We connect via `psycopg2` using the token as the password
 # MAGIC
 # MAGIC > 💡 **Token lifetime**: Tokens auto-expire, so they're generated fresh each time.
 # MAGIC > This is more secure than static passwords and fully automated.
@@ -252,7 +253,7 @@ try:
     conn = psycopg2.connect(
         host=main_host,
         port=5432,
-        dbname="postgres",
+        dbname="databricks_postgres",
         user=db_user,
         password=db_token,
         sslmode="require"
