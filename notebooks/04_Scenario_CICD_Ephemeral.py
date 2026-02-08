@@ -1,7 +1,7 @@
 # Databricks notebook source
 
 # MAGIC %md
-# MAGIC # 🔄 Scenario 5: CI/CD Ephemeral Branches
+# MAGIC # 🔄 Scenario 4: CI/CD Ephemeral Branches
 # MAGIC
 # MAGIC **Use case**: In a CI/CD pipeline, each pull request or test run gets its own **ephemeral
 # MAGIC database branch** that auto-expires after a short TTL. This gives every PR a full, isolated
@@ -314,4 +314,4 @@ for pr_num, branch_name in ci_branches.items():
 # MAGIC - **Instant provisioning** — copy-on-write means zero wait time
 # MAGIC - **Cost-effective** — branches share storage until data diverges
 # MAGIC
-# MAGIC > 🎉 **That's all 5 scenarios!** Run `99_Cleanup` to tear down the project.
+# MAGIC > 🎉 **That's all 4 scenarios!** Run `99_Cleanup` to tear down the project.

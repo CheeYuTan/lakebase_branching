@@ -327,5 +327,5 @@ for bn in [BRANCH_NAME, BRANCH_NAME_V2]:
 # MAGIC 3. **Re-branch from current production** when drift is detected (like `git rebase`)
 # MAGIC 4. **Branches are cheap** — creating a v2 branch costs nothing (copy-on-write)
 # MAGIC
-# MAGIC > **Next**: Try **Scenario 4** (`04_Scenario_Point_In_Time`) to learn how to recover
-# MAGIC > from accidental data loss using point-in-time branching.
+# MAGIC > **Next**: Try **Scenario 4** (`04_Scenario_CICD_Ephemeral`) to see how to use
+# MAGIC > short-lived branches for CI/CD pipelines with auto-expiration.
