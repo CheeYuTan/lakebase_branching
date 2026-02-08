@@ -243,8 +243,7 @@ print(f"\n🎉 Schema change successfully promoted to production!")
 
 feature_conn.close()
 
-w.postgres.delete_branch(name=f"projects/{project_name}/branches/{BRANCH_NAME}").wait()
-print(f"🗑️ Branch '{BRANCH_NAME}' deleted.")
+delete_branch_safe(BRANCH_NAME)
 
 # List remaining branches
 branches = list(w.postgres.list_branches(parent=f"projects/{project_name}"))

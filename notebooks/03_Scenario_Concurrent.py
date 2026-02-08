@@ -299,8 +299,7 @@ feature_conn_v2.close()
 
 for bn in [BRANCH_NAME, BRANCH_NAME_V2]:
     try:
-        w.postgres.delete_branch(name=f"projects/{project_name}/branches/{bn}").wait()
-        print(f"🗑️ Branch '{bn}' deleted.")
+        delete_branch_safe(bn)
     except Exception as e:
         print(f"   ('{bn}' already cleaned up)")
 

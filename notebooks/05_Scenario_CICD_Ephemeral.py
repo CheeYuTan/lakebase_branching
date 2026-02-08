@@ -270,10 +270,7 @@ print(f"\n✅ Production is completely untouched!")
 
 for pr_num, branch_name in ci_branches.items():
     try:
-        w.postgres.delete_branch(
-            name=f"projects/{project_name}/branches/{branch_name}"
-        ).wait()
-        print(f"🗑️ PR #{pr_num}: Branch '{branch_name}' deleted")
+        delete_branch_safe(branch_name)
     except Exception:
         print(f"   PR #{pr_num}: Branch already cleaned up")
 

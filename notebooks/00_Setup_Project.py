@@ -608,7 +608,30 @@ def connect_to_branch(branch_id, wait_seconds=300):
     print(f"   Host: {host}")
     return branch_conn, host, ep.name
 
-print("🔧 connect_to_branch() helper defined — available for all scenario notebooks.")
+def delete_branch_safe(branch_id, max_retries=6, wait_between=30):
+    """
+    Delete a branch, retrying if the endpoint is still reconciling.
+    
+    Args:
+        branch_id: Branch name (e.g. "dev-readonly")
+        max_retries: Max number of retry attempts (default 6)
+        wait_between: Seconds to wait between retries (default 30)
+    """
+    branch_full = f"projects/{project_name}/branches/{branch_id}"
+    
+    for attempt in range(max_retries):
+        try:
+            w.postgres.delete_branch(name=branch_full).wait()
+            print(f"🗑️ Branch '{branch_id}' deleted.")
+            return
+        except Exception as e:
+            if "reconciliation" in str(e).lower() and attempt < max_retries - 1:
+                print(f"   ⏳ Endpoint still reconciling, retrying in {wait_between}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_between)
+            else:
+                raise
+
+print("🔧 connect_to_branch() and delete_branch_safe() helpers defined.")
 
 # COMMAND ----------
 

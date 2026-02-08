@@ -171,9 +171,8 @@ print(f"✅ Data isolation confirmed — branch changes don't affect production!
 # Close the branch connection first
 dev_conn.close()
 
-# Delete the branch
-w.postgres.delete_branch(name=f"projects/{project_name}/branches/{BRANCH_NAME}").wait()
-print(f"🗑️ Branch '{BRANCH_NAME}' deleted.")
+# Delete the branch (with retry in case endpoint is still reconciling)
+delete_branch_safe(BRANCH_NAME)
 
 # Verify — list remaining branches
 branches = list(w.postgres.list_branches(parent=f"projects/{project_name}"))

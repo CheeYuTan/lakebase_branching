@@ -274,8 +274,8 @@ else:
 
 recovery_conn.close()
 
-w.postgres.delete_branch(name=f"projects/{project_name}/branches/{BRANCH_NAME}").wait()
-print(f"🗑️ Recovery branch deleted.")
+delete_branch_safe(BRANCH_NAME)
+print(f"   Recovery complete.")
 
 # COMMAND ----------
 
