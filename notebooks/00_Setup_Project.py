@@ -144,6 +144,17 @@ else:
     
     print(f"\n✅ Project '{project_name}' created successfully!")
 
+# Get project UID and display the Lakebase UI link
+project_obj = next(
+    p for p in w.postgres.list_projects()
+    if p.name == f"projects/{project_name}"
+)
+project_uid = project_obj.uid
+workspace_host = w.config.host.rstrip("/")
+lakebase_url = f"{workspace_host}/lakebase/projects/{project_uid}"
+
+print(f"\n🔗 Lakebase UI: {lakebase_url}")
+
 # COMMAND ----------
 
 # MAGIC %md
