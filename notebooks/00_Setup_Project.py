@@ -24,10 +24,11 @@
 # MAGIC ```
 # MAGIC Lakebase Project: lakebase-branching-demo
 # MAGIC └── main (default branch)
-# MAGIC     ├── customers   (100 rows)
-# MAGIC     ├── products    (50 rows)
-# MAGIC     ├── orders      (200 rows)
-# MAGIC     └── order_items (500 rows)
+# MAGIC     └── ecommerce (schema)
+# MAGIC         ├── customers   (100 rows)
+# MAGIC         ├── products    (50 rows)
+# MAGIC         ├── orders      (200 rows)
+# MAGIC         └── order_items (500 rows)
 # MAGIC ```
 # MAGIC
 # MAGIC > 📖 **Docs**: [Manage branches](https://docs.databricks.com/aws/en/oltp/projects/manage-branches) | [API Reference](https://docs.databricks.com/api/workspace/postgres)
@@ -51,6 +52,7 @@ dbutils.library.restartPython()
 # MAGIC | Widget | Description |
 # MAGIC |---|---|
 # MAGIC | `project_name` | Unique name for your Lakebase project. Keep this consistent across all notebooks. |
+# MAGIC | `db_schema` | PostgreSQL schema for demo tables (avoids `public` schema permission issues) |
 # MAGIC | `min_cu` | Minimum compute units (0.5 = smallest, cost-effective for demos) |
 # MAGIC | `max_cu` | Maximum compute units (4.0 = enough for realistic workloads) |
 # MAGIC | `suspend_timeout_seconds` | Auto-suspend idle compute after N seconds (60 = aggressive, saves cost) |
@@ -58,20 +60,23 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 dbutils.widgets.text("project_name", "lakebase-branching-demo", "1. Project Name")
-dbutils.widgets.text("min_cu", "0.5", "2. Min Compute Units")
-dbutils.widgets.text("max_cu", "4.0", "3. Max Compute Units")
-dbutils.widgets.text("suspend_timeout_seconds", "60", "4. Suspend Timeout (sec)")
+dbutils.widgets.text("db_schema", "ecommerce", "2. DB Schema")
+dbutils.widgets.text("min_cu", "0.5", "3. Min Compute Units")
+dbutils.widgets.text("max_cu", "4.0", "4. Max Compute Units")
+dbutils.widgets.text("suspend_timeout_seconds", "60", "5. Suspend Timeout (sec)")
 
 # COMMAND ----------
 
 # Read widget values
 project_name = dbutils.widgets.get("project_name")
+db_schema = dbutils.widgets.get("db_schema")
 min_cu = float(dbutils.widgets.get("min_cu"))
 max_cu = float(dbutils.widgets.get("max_cu"))
 suspend_timeout_seconds = int(dbutils.widgets.get("suspend_timeout_seconds"))
 
 print("📋 Configuration:")
 print(f"   Project Name:      {project_name}")
+print(f"   DB Schema:         {db_schema}")
 print(f"   Min CU:            {min_cu}")
 print(f"   Max CU:            {max_cu}")
 print(f"   Suspend Timeout:   {suspend_timeout_seconds}s")
@@ -315,15 +320,21 @@ except Exception as e:
 
 # --- Schema SQL (embedded for portability) ---
 
-SEED_SCHEMA_SQL = """
+SEED_SCHEMA_SQL = f"""
+-- Create schema (avoids permission issues on 'public')
+CREATE SCHEMA IF NOT EXISTS {db_schema};
+
+-- Set search path so all subsequent commands use this schema
+SET search_path TO {db_schema};
+
 -- Drop tables if they exist (idempotent)
-DROP TABLE IF EXISTS order_items CASCADE;
-DROP TABLE IF EXISTS orders CASCADE;
-DROP TABLE IF EXISTS products CASCADE;
-DROP TABLE IF EXISTS customers CASCADE;
+DROP TABLE IF EXISTS {db_schema}.order_items CASCADE;
+DROP TABLE IF EXISTS {db_schema}.orders CASCADE;
+DROP TABLE IF EXISTS {db_schema}.products CASCADE;
+DROP TABLE IF EXISTS {db_schema}.customers CASCADE;
 
 -- Customers
-CREATE TABLE customers (
+CREATE TABLE {db_schema}.customers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -331,7 +342,7 @@ CREATE TABLE customers (
 );
 
 -- Products
-CREATE TABLE products (
+CREATE TABLE {db_schema}.products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
     price DECIMAL(10,2) NOT NULL,
@@ -339,19 +350,19 @@ CREATE TABLE products (
 );
 
 -- Orders
-CREATE TABLE orders (
+CREATE TABLE {db_schema}.orders (
     id SERIAL PRIMARY KEY,
-    customer_id INT REFERENCES customers(id),
+    customer_id INT REFERENCES {db_schema}.customers(id),
     total DECIMAL(10,2) NOT NULL,
     status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Order Items
-CREATE TABLE order_items (
+CREATE TABLE {db_schema}.order_items (
     id SERIAL PRIMARY KEY,
-    order_id INT REFERENCES orders(id),
-    product_id INT REFERENCES products(id),
+    order_id INT REFERENCES {db_schema}.orders(id),
+    product_id INT REFERENCES {db_schema}.products(id),
     quantity INT NOT NULL,
     unit_price DECIMAL(10,2) NOT NULL
 );
@@ -360,11 +371,11 @@ CREATE TABLE order_items (
 with conn.cursor() as cur:
     cur.execute(SEED_SCHEMA_SQL)
 
-print("✅ Schema created:")
-print("   • customers")
-print("   • products")
-print("   • orders")
-print("   • order_items")
+print(f"✅ Schema '{db_schema}' created with tables:")
+print(f"   • {db_schema}.customers")
+print(f"   • {db_schema}.products")
+print(f"   • {db_schema}.orders")
+print(f"   • {db_schema}.order_items")
 
 # COMMAND ----------
 
@@ -411,7 +422,7 @@ with conn.cursor() as cur:
         customers.append((name, email))
     
     cur.executemany(
-        "INSERT INTO customers (name, email) VALUES (%s, %s)",
+        f"INSERT INTO {db_schema}.customers (name, email) VALUES (%s, %s)",
         customers
     )
     print(f"✅ Inserted {len(customers)} customers")
@@ -437,7 +448,7 @@ with conn.cursor() as cur:
             products.append((item, price, category))
     
     cur.executemany(
-        "INSERT INTO products (name, price, category) VALUES (%s, %s, %s)",
+        f"INSERT INTO {db_schema}.products (name, price, category) VALUES (%s, %s, %s)",
         products
     )
     print(f"✅ Inserted {len(products)} products")
@@ -452,7 +463,7 @@ with conn.cursor() as cur:
         orders.append((customer_id, total, status))
     
     cur.executemany(
-        "INSERT INTO orders (customer_id, total, status) VALUES (%s, %s, %s)",
+        f"INSERT INTO {db_schema}.orders (customer_id, total, status) VALUES (%s, %s, %s)",
         orders
     )
     print(f"✅ Inserted {len(orders)} orders")
@@ -468,17 +479,17 @@ with conn.cursor() as cur:
             order_items.append((order_id, product_id, quantity, unit_price))
     
     cur.executemany(
-        "INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (%s, %s, %s, %s)",
+        f"INSERT INTO {db_schema}.order_items (order_id, product_id, quantity, unit_price) VALUES (%s, %s, %s, %s)",
         order_items
     )
     print(f"✅ Inserted {len(order_items)} order items")
 
     # Update order totals based on actual items
-    cur.execute("""
-        UPDATE orders o SET total = sub.total
+    cur.execute(f"""
+        UPDATE {db_schema}.orders o SET total = sub.total
         FROM (
             SELECT order_id, SUM(quantity * unit_price) as total
-            FROM order_items
+            FROM {db_schema}.order_items
             GROUP BY order_id
         ) sub
         WHERE o.id = sub.order_id
@@ -504,34 +515,34 @@ print("=" * 60)
 with conn.cursor() as cur:
     # Table row counts
     tables = ["customers", "products", "orders", "order_items"]
-    print("\n📊 Tables:")
+    print(f"\n📊 Tables (schema: {db_schema}):")
     for table in tables:
-        cur.execute(f"SELECT count(*) FROM {table}")
+        cur.execute(f"SELECT count(*) FROM {db_schema}.{table}")
         count = cur.fetchone()[0]
-        print(f"   • {table:20s} {count:>6} rows")
+        print(f"   • {db_schema}.{table:20s} {count:>6} rows")
 
     # Sample data preview
     print("\n👤 Sample Customers (first 5):")
-    cur.execute("SELECT id, name, email FROM customers ORDER BY id LIMIT 5")
+    cur.execute(f"SELECT id, name, email FROM {db_schema}.customers ORDER BY id LIMIT 5")
     for row in cur.fetchall():
         print(f"   {row[0]:3d} | {row[1]:20s} | {row[2]}")
 
     # Order stats
     print("\n📦 Order Status Distribution:")
-    cur.execute("""
+    cur.execute(f"""
         SELECT status, count(*) as cnt, ROUND(AVG(total), 2) as avg_total
-        FROM orders GROUP BY status ORDER BY status
+        FROM {db_schema}.orders GROUP BY status ORDER BY status
     """)
     for row in cur.fetchall():
         print(f"   {row[0]:12s} {row[1]:4d} orders  (avg ${row[2]})")
 
     # Top categories
     print("\n🏷️  Product Categories:")
-    cur.execute("""
+    cur.execute(f"""
         SELECT category, count(*) as cnt, 
                ROUND(MIN(price), 2) as min_price,
                ROUND(MAX(price), 2) as max_price
-        FROM products GROUP BY category ORDER BY category
+        FROM {db_schema}.products GROUP BY category ORDER BY category
     """)
     for row in cur.fetchall():
         print(f"   {row[0]:15s} {row[1]:3d} products  (${row[2]} – ${row[3]})")
