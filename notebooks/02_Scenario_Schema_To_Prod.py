@@ -170,7 +170,30 @@ with feature_conn.cursor() as cur:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 5: Verify Production is Untouched
+# MAGIC ## Step 5: Compare Schemas in the UI
+# MAGIC
+# MAGIC Lakebase provides a built-in **Schema Diff** tool that lets you visually compare the schema
+# MAGIC of a branch against its parent. This is a great way to review what changed before promoting.
+# MAGIC
+# MAGIC 👉 **Try it now:**
+# MAGIC 1. Open the Lakebase UI (link printed below)
+# MAGIC 2. Navigate to the `feature-loyalty-tier` branch
+# MAGIC 3. Click the **Schema diff** button to see the differences vs production
+# MAGIC
+# MAGIC > 📖 **Docs**: [Compare branch schemas](https://docs.databricks.com/aws/en/oltp/projects/manage-branches#compare-branch-schemas)
+
+# COMMAND ----------
+
+# Print direct link to the branch in the Lakebase UI
+branch_obj = w.postgres.get_branch(name=f"projects/{project_name}/branches/{BRANCH_NAME}")
+branch_uid = branch_obj.uid
+print(f"🔗 Open the branch in the Lakebase UI and click 'Schema diff':")
+print(f"   {lakebase_url}/branches/{branch_uid}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Step 6: Verify Production is Untouched
 # MAGIC
 # MAGIC The schema change only exists on the branch. Production still has the original schema.
 
@@ -193,7 +216,7 @@ print(f"✅ Production is untouched — schema change is isolated to the feature
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 6: Promote Migration to Production (Replay on Production)
+# MAGIC ## Step 7: Promote Migration to Production (Replay on Production)
 # MAGIC
 # MAGIC Now we replay the **exact same DDL** on `production`:
 # MAGIC
@@ -226,7 +249,7 @@ print(f"\n🎉 Schema change successfully promoted to production!")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 7: Cleanup — Delete the Feature Branch
+# MAGIC ## Step 8: Cleanup — Delete the Feature Branch
 # MAGIC
 # MAGIC The feature branch has served its purpose. You can safely delete it, or let TTL handle it.
 # MAGIC
