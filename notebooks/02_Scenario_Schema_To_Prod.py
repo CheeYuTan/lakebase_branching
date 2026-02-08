@@ -9,8 +9,7 @@
 # MAGIC ## What You'll Learn
 # MAGIC - How to develop schema changes (DDL) on a **feature branch**
 # MAGIC - How to validate migrations before touching production
-# MAGIC - Why Lakebase has **no native merge** — and how the **migration replay** pattern works
-# MAGIC - How to promote validated schema changes to `production`
+# MAGIC - How to promote validated schema changes to `production` by replaying DDL
 # MAGIC
 # MAGIC ## How It Works
 # MAGIC ```
@@ -22,9 +21,6 @@
 # MAGIC              3. Validate ──────────┘
 # MAGIC              4. 🗑️ delete branch
 # MAGIC ```
-# MAGIC
-# MAGIC > 🔑 **Key insight**: Lakebase branches are for **validation**, not merging.
-# MAGIC > You develop and test your migration on a branch, then **replay the same DDL** on production.
 # MAGIC
 # MAGIC > 📖 **Docs**: [Manage branches](https://docs.databricks.com/aws/en/oltp/projects/manage-branches)
 
@@ -199,16 +195,11 @@ print(f"✅ Production is untouched — schema change is isolated to the feature
 # MAGIC %md
 # MAGIC ## Step 6: Promote Migration to Production (Replay on Production)
 # MAGIC
-# MAGIC Since Lakebase doesn't have a native "merge" operation (like Git), we use the
-# MAGIC **migration replay** pattern:
+# MAGIC Now we replay the **exact same DDL** on `production`:
 # MAGIC
 # MAGIC 1. We validated the migration on the branch ✅
-# MAGIC 2. Now we replay the **exact same DDL** on `production`
-# MAGIC 3. Since the SQL is idempotent, it's safe to run multiple times
-# MAGIC
-# MAGIC > 🔑 **This is a feature, not a limitation.** In traditional databases, you'd run DDL
-# MAGIC > directly on production without any safety net. With Lakebase, you get to validate
-# MAGIC > on a branch first, then replay with confidence.
+# MAGIC 2. Now we replay the same idempotent DDL on `production`
+# MAGIC 3. Since the SQL uses `IF NOT EXISTS`, it's safe to run multiple times
 
 # COMMAND ----------
 
