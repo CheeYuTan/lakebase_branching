@@ -109,7 +109,7 @@ print(f"   Workspace: {w.config.host}")
 # MAGIC - Autoscaling is configured between `min_cu` and `max_cu`
 # MAGIC - The compute auto-suspends after `suspend_timeout_seconds` of idle time
 # MAGIC
-# MAGIC > ⏱️ This typically takes **1-3 minutes** to complete.
+# MAGIC > ⏱️ It may take a few moments for your compute to activate.
 
 # COMMAND ----------
 
