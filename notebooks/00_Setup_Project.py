@@ -22,7 +22,7 @@
 # MAGIC
 # MAGIC ## Architecture After Setup
 # MAGIC ```
-# MAGIC Lakebase Project: lakebase-branching-demo
+# MAGIC Lakebase Project: lakebase-branching-<username>
 # MAGIC └── main (default branch)
 # MAGIC     └── ecommerce (schema)
 # MAGIC         ├── customers   (100 rows)
@@ -45,49 +45,12 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## ⚙️ Configuration
-# MAGIC
-# MAGIC Set the widgets below to configure your project. The defaults work out of the box.
-# MAGIC
-# MAGIC | Widget | Description |
-# MAGIC |---|---|
-# MAGIC | `project_name` | Unique name for your Lakebase project. Keep this consistent across all notebooks. |
-# MAGIC | `db_schema` | PostgreSQL schema for demo tables (avoids `public` schema permission issues) |
-# MAGIC | `min_cu` | Minimum compute units (0.5 = smallest, cost-effective for demos) |
-# MAGIC | `max_cu` | Maximum compute units (4.0 = enough for realistic workloads) |
-# MAGIC | `suspend_timeout_seconds` | Auto-suspend idle compute after N seconds (60 = aggressive, saves cost) |
-
-# COMMAND ----------
-
-dbutils.widgets.text("project_name", "lakebase-branching-demo", "1. Project Name")
-dbutils.widgets.text("db_schema", "ecommerce", "2. DB Schema")
-dbutils.widgets.text("min_cu", "0.5", "3. Min Compute Units")
-dbutils.widgets.text("max_cu", "4.0", "4. Max Compute Units")
-dbutils.widgets.text("suspend_timeout_seconds", "60", "5. Suspend Timeout (sec)")
-
-# COMMAND ----------
-
-# Read widget values
-project_name = dbutils.widgets.get("project_name")
-db_schema = dbutils.widgets.get("db_schema")
-min_cu = float(dbutils.widgets.get("min_cu"))
-max_cu = float(dbutils.widgets.get("max_cu"))
-suspend_timeout_seconds = int(dbutils.widgets.get("suspend_timeout_seconds"))
-
-print("📋 Configuration:")
-print(f"   Project Name:      {project_name}")
-print(f"   DB Schema:         {db_schema}")
-print(f"   Min CU:            {min_cu}")
-print(f"   Max CU:            {max_cu}")
-print(f"   Suspend Timeout:   {suspend_timeout_seconds}s")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Step 1: Initialize the Databricks SDK
+# MAGIC ## Step 1: Initialize SDK & Configuration
 # MAGIC
 # MAGIC The `WorkspaceClient` auto-authenticates when running inside a Databricks notebook —
 # MAGIC no tokens or secrets needed.
+# MAGIC
+# MAGIC The project name is derived from your Databricks username to keep it unique per user.
 
 # COMMAND ----------
 
@@ -95,8 +58,28 @@ from databricks.sdk import WorkspaceClient
 
 w = WorkspaceClient()
 
+# Derive project name from the current user's identity
+current_user = w.current_user.me()
+db_user = current_user.user_name
+username_prefix = db_user.split("@")[0].replace(".", "-")  # e.g. "steven-tan"
+project_name = f"lakebase-branching-{username_prefix}"
+
+# Fixed configuration
+db_schema = "ecommerce"
+min_cu = 0.5
+max_cu = 4.0
+suspend_timeout_seconds = 60
+
 print(f"✅ SDK initialized")
 print(f"   Workspace: {w.config.host}")
+print(f"   User:      {db_user}")
+print(f"")
+print("📋 Configuration:")
+print(f"   Project Name:      {project_name}")
+print(f"   DB Schema:         {db_schema}")
+print(f"   Min CU:            {min_cu}")
+print(f"   Max CU:            {max_cu}")
+print(f"   Suspend Timeout:   {suspend_timeout_seconds}s")
 
 # COMMAND ----------
 
@@ -109,8 +92,8 @@ print(f"   Workspace: {w.config.host}")
 # MAGIC - A new PostgreSQL 17 instance is provisioned
 # MAGIC - A default `main` branch is created automatically
 # MAGIC - A compute endpoint is attached to the `main` branch
-# MAGIC - Autoscaling is configured between `min_cu` and `max_cu`
-# MAGIC - The compute auto-suspends after `suspend_timeout_seconds` of idle time
+# MAGIC - Autoscaling is configured (0.5 – 4.0 CU)
+# MAGIC - The compute auto-suspends after 60s of idle time
 # MAGIC
 # MAGIC > ⏱️ It may take a few moments for your compute to activate.
 
@@ -237,11 +220,6 @@ else:
 # COMMAND ----------
 
 import psycopg2
-
-# Get current user identity
-current_user = w.current_user.me()
-db_user = current_user.user_name
-print(f"👤 Current user: {db_user}")
 
 # Generate a fresh OAuth token
 cred = w.postgres.generate_database_credential(endpoint=main_endpoint_name)
