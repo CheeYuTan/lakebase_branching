@@ -15,7 +15,6 @@
 # MAGIC
 # MAGIC ## Prerequisites
 # MAGIC - **Cluster**: Any Databricks cluster with Python 3.10+
-# MAGIC - **Permissions**: `CAN MANAGE` on Lakebase
 # MAGIC - **Region**: Workspace must be in a supported region:
 # MAGIC   `us-east-1`, `us-east-2`, `eu-central-1`, `eu-west-1`, `eu-west-2`,
 # MAGIC   `ap-south-1`, `ap-southeast-1`, `ap-southeast-2`
@@ -23,7 +22,7 @@
 # MAGIC ## Architecture After Setup
 # MAGIC ```
 # MAGIC Lakebase Project: lakebase-branching-<username>
-# MAGIC └── main (default branch)
+# MAGIC └── production (default branch)
 # MAGIC     └── ecommerce (schema)
 # MAGIC         ├── customers   (100 rows)
 # MAGIC         ├── products    (50 rows)
@@ -90,8 +89,8 @@ print(f"   Suspend Timeout:   {suspend_timeout_seconds}s")
 # MAGIC
 # MAGIC **What happens under the hood:**
 # MAGIC - A new PostgreSQL 17 instance is provisioned
-# MAGIC - A default `main` branch is created automatically
-# MAGIC - A compute endpoint is attached to the `main` branch
+# MAGIC - A default `production` branch is created automatically
+# MAGIC - A compute endpoint is attached to the `production` branch
 # MAGIC - Autoscaling is configured (0.5 – 4.0 CU)
 # MAGIC - The compute auto-suspends after 60s of idle time
 # MAGIC
@@ -148,14 +147,14 @@ print(f"\n🔗 Lakebase UI: {lakebase_url}")
 # MAGIC %md
 # MAGIC ## Step 2b: Verify Project & Get Main Branch
 # MAGIC
-# MAGIC Every Lakebase project comes with a default `main` branch. Let's confirm it exists
+# MAGIC Every Lakebase project comes with a default `production` branch. Let's confirm it exists
 # MAGIC and get its compute endpoint (we'll need the host to connect via `psycopg2`).
 
 # COMMAND ----------
 
 import time
 
-# List branches — the default 'main' branch should exist
+# List branches — the default 'production' branch should exist
 branches = list(w.postgres.list_branches(parent=f"projects/{project_name}"))
 
 print(f"📋 Branches in '{project_name}':")
@@ -164,35 +163,35 @@ for b in branches:
     is_default = "⭐ default" if b.status and b.status.default else ""
     print(f"   • {branch_id} {is_default}")
 
-# Get the main branch (the default one, or fallback to the first)
-main_branch = next(
+# Get the production branch (the default one, or fallback to the first)
+prod_branch = next(
     (b for b in branches if b.status and b.status.default),
     branches[0]
 )
-main_branch_name = main_branch.name
-print(f"\n✅ Main branch: {main_branch_name}")
+prod_branch_name = prod_branch.name
+print(f"\n✅ Production branch: {prod_branch_name}")
 
 # COMMAND ----------
 
-# Get the compute endpoint for the main branch
-endpoints = list(w.postgres.list_endpoints(parent=main_branch_name))
+# Get the compute endpoint for the production branch
+endpoints = list(w.postgres.list_endpoints(parent=prod_branch_name))
 
 if not endpoints:
     print("⏳ Compute endpoint not ready yet. Waiting...")
     for i in range(30):
         time.sleep(10)
-        endpoints = list(w.postgres.list_endpoints(parent=main_branch_name))
+        endpoints = list(w.postgres.list_endpoints(parent=prod_branch_name))
         if endpoints:
             break
         print(f"   Still waiting... ({(i+1)*10}s)")
 
 if endpoints:
-    main_endpoint = endpoints[0]
-    main_endpoint_name = main_endpoint.name
-    main_host = main_endpoint.status.hosts.host
+    prod_endpoint = endpoints[0]
+    prod_endpoint_name = prod_endpoint.name
+    prod_host = prod_endpoint.status.hosts.host
     print(f"✅ Compute endpoint ready!")
-    print(f"   Endpoint: {main_endpoint_name}")
-    print(f"   Host: {main_host}")
+    print(f"   Endpoint: {prod_endpoint_name}")
+    print(f"   Host: {prod_host}")
     print(f"   Port: 5432")
     print(f"   Database: databricks_postgres")
 else:
@@ -222,14 +221,14 @@ else:
 import psycopg2
 
 # Generate a fresh OAuth token
-cred = w.postgres.generate_database_credential(endpoint=main_endpoint_name)
+cred = w.postgres.generate_database_credential(endpoint=prod_endpoint_name)
 db_token = cred.token
 print(f"🔑 OAuth token generated (expires: {cred.expire_time})")
 
 # Connect to the database
 try:
     conn = psycopg2.connect(
-        host=main_host,
+        host=prod_host,
         port=5432,
         dbname="databricks_postgres",
         user=db_user,
@@ -244,7 +243,7 @@ try:
 
     print(f"✅ Connected to Lakebase!")
     print(f"   PostgreSQL: {version[:60]}...")
-    print(f"   Host: {main_host}")
+    print(f"   Host: {prod_host}")
     print(f"   User: {db_user}")
 except Exception as e:
     print(f"❌ Connection failed: {e}")
@@ -545,7 +544,7 @@ def connect_to_branch(branch_id, wait_seconds=300):
     Connect to a Lakebase branch endpoint.
     
     Args:
-        branch_id: Branch name (e.g. "main", "dev-readonly", "feature/loyalty-tier")
+        branch_id: Branch name (e.g. "production", "dev-readonly", "feature/loyalty-tier")
         wait_seconds: Max seconds to wait for endpoint (default 300)
     
     Returns:
@@ -601,9 +600,9 @@ print("🔧 connect_to_branch() helper defined — available for all scenario no
 # MAGIC | `project_name` | Lakebase project name |
 # MAGIC | `db_user` | Current user's email |
 # MAGIC | `db_schema` | PostgreSQL schema (`ecommerce`) |
-# MAGIC | `conn` | Connection to `main` branch |
-# MAGIC | `main_branch_name` | Full name of the main branch |
-# MAGIC | `main_endpoint_name` | Full name of the main endpoint |
-# MAGIC | `main_host` | Hostname of the main endpoint |
+# MAGIC | `conn` | Connection to `production` branch |
+# MAGIC | `prod_branch_name` | Full name of the production branch |
+# MAGIC | `prod_endpoint_name` | Full name of the production endpoint |
+# MAGIC | `prod_host` | Hostname of the production endpoint |
 # MAGIC | `lakebase_url` | Lakebase UI link |
 # MAGIC | `connect_to_branch()` | Helper to connect to any branch |

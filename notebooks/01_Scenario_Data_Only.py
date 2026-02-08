@@ -7,14 +7,14 @@
 # MAGIC without any risk of modifying the production database.
 # MAGIC
 # MAGIC ## What You'll Learn
-# MAGIC - How to create a **branch** from `main` (instant, zero-cost copy-on-write)
-# MAGIC - How branches provide **full data isolation** — changes on a branch don't affect `main`
+# MAGIC - How to create a **branch** from `production` (instant, zero-cost copy-on-write)
+# MAGIC - How branches provide **full data isolation** — changes on a branch don't affect `production`
 # MAGIC - How to query production data safely on a branch
 # MAGIC - How **branch TTL** (time-to-live) auto-cleans up after you're done
 # MAGIC
 # MAGIC ## How It Works
 # MAGIC ```
-# MAGIC main ──────────────────────────────────────────────── (untouched)
+# MAGIC production ─────────────────────────────────────────── (untouched)
 # MAGIC        \
 # MAGIC         └── dev-readonly ── query ── insert ── 🗑️ (auto-expires)
 # MAGIC              (instant copy)
@@ -40,7 +40,7 @@
 # MAGIC ---
 # MAGIC ## Step 1: Create a Dev Branch
 # MAGIC
-# MAGIC We'll create a branch called `dev-readonly` from `main`. This is an **instant** operation
+# MAGIC We'll create a branch called `dev-readonly` from `production`. This is an **instant** operation
 # MAGIC thanks to Lakebase's copy-on-write architecture — no data is physically duplicated.
 # MAGIC
 # MAGIC We also set a **TTL of 24 hours**, so the branch auto-deletes if we forget to clean up.
@@ -59,19 +59,19 @@ except Exception:
     pass  # Branch doesn't exist, that's fine
 
 # Create the branch
-print(f"🔄 Creating branch '{BRANCH_NAME}' from main...")
+print(f"🔄 Creating branch '{BRANCH_NAME}' from production...")
 
 branch_result = w.postgres.create_branch(
     parent=f"projects/{project_name}",
     branch=Branch(spec=BranchSpec(
-        source_branch=f"projects/{project_name}/branches/main",
+        source_branch=f"projects/{project_name}/branches/production",
         ttl=Duration(seconds=86400)  # 24-hour TTL
     )),
     branch_id=BRANCH_NAME
 ).wait()
 
 print(f"✅ Branch '{BRANCH_NAME}' created!")
-print(f"   Source: main")
+print(f"   Source: production")
 print(f"   TTL: 24 hours (auto-deletes after expiry)")
 
 # COMMAND ----------
@@ -92,15 +92,15 @@ dev_conn, dev_host, dev_endpoint = connect_to_branch(BRANCH_NAME)
 # MAGIC ## Step 3: Query Production Data on the Branch
 # MAGIC
 # MAGIC The branch has a **complete copy** of the production data. Let's verify by running the same
-# MAGIC queries we'd run on `main`.
+# MAGIC queries we'd run on `production`.
 # MAGIC
 # MAGIC > 💡 **Key insight**: No data was copied during branch creation. Lakebase uses
-# MAGIC > copy-on-write — the branch shares storage with `main` until data diverges.
+# MAGIC > copy-on-write — the branch shares storage with `production` until data diverges.
 
 # COMMAND ----------
 
 with dev_conn.cursor() as cur:
-    # Row counts — should match main exactly
+    # Row counts — should match production exactly
     tables = ["customers", "products", "orders", "order_items"]
     print(f"📊 Data on branch '{BRANCH_NAME}' (schema: {db_schema}):")
     for table in tables:
@@ -129,7 +129,7 @@ with dev_conn.cursor() as cur:
 # MAGIC Now let's prove that branches are **fully isolated**. We'll:
 # MAGIC 1. Insert a new customer on the **branch**
 # MAGIC 2. Verify it exists on the **branch**
-# MAGIC 3. Verify it does **NOT** exist on **main**
+# MAGIC 3. Verify it does **NOT** exist on **production**
 # MAGIC
 # MAGIC This is the core value of branching — developers can freely experiment without any risk
 # MAGIC to production data.
@@ -145,16 +145,16 @@ with dev_conn.cursor() as cur:
     cur.execute(f"SELECT count(*) FROM {db_schema}.customers")
     branch_count = cur.fetchone()[0]
 
-# Check main — the test customer should NOT be there
+# Check production — the test customer should NOT be there
 with conn.cursor() as cur:
     cur.execute(f"SELECT count(*) FROM {db_schema}.customers")
-    main_count = cur.fetchone()[0]
+    prod_count = cur.fetchone()[0]
 
 print(f"📊 Customer counts after insert:")
 print(f"   Branch '{BRANCH_NAME}': {branch_count} customers (includes test user)")
-print(f"   Main:                   {main_count} customers (unchanged!)")
+print(f"   Production:             {prod_count} customers (unchanged!)")
 print(f"")
-print(f"✅ Data isolation confirmed — branch changes don't affect main!")
+print(f"✅ Data isolation confirmed — branch changes don't affect production!")
 
 # COMMAND ----------
 
@@ -191,7 +191,7 @@ for b in branches:
 # MAGIC |---|---|
 # MAGIC | **Branch creation** | Instant — no data copied (copy-on-write) |
 # MAGIC | **Data access** | Full production dataset available immediately |
-# MAGIC | **Isolation** | Insert on branch did NOT appear on main |
+# MAGIC | **Isolation** | Insert on branch did NOT appear on production |
 # MAGIC | **Cleanup** | Explicit delete, or automatic via TTL |
 # MAGIC
 # MAGIC ### When to Use This Pattern
