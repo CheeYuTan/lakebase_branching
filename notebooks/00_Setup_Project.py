@@ -542,31 +542,54 @@ print("=" * 60)
 def connect_to_branch(branch_id, wait_seconds=300):
     """
     Connect to a Lakebase branch endpoint.
+    Automatically creates a compute endpoint if none exists.
     
     Args:
-        branch_id: Branch name (e.g. "production", "dev-readonly", "feature/loyalty-tier")
-        wait_seconds: Max seconds to wait for endpoint (default 300)
+        branch_id: Branch name (e.g. "dev-readonly", "feature-loyalty-tier")
+        wait_seconds: Max seconds to wait for endpoint to become ready (default 300)
     
     Returns:
         tuple: (connection, host, endpoint_name)
     """
+    from databricks.sdk.service.postgres import Endpoint, EndpointSpec, EndpointType, Duration as Dur
+
     branch_full = f"projects/{project_name}/branches/{branch_id}"
     
-    # Find or wait for the endpoint
+    # Check if an endpoint already exists
     endpoints = list(w.postgres.list_endpoints(parent=branch_full))
+    
     if not endpoints:
-        print(f"⏳ Waiting for endpoint on branch '{branch_id}'...")
+        # Create a compute endpoint for this branch
+        ep_id = f"ep-{branch_id}"
+        print(f"🔄 Creating compute endpoint for branch '{branch_id}'...")
+        w.postgres.create_endpoint(
+            parent=branch_full,
+            endpoint=Endpoint(spec=EndpointSpec(
+                endpoint_type=EndpointType.ENDPOINT_TYPE_READ_WRITE,
+                autoscaling_limit_min_cu=min_cu,
+                autoscaling_limit_max_cu=max_cu,
+                suspend_timeout_duration=Dur(seconds=suspend_timeout_seconds)
+            )),
+            endpoint_id=ep_id
+        ).wait()
+        print(f"   ✅ Compute endpoint created!")
+        endpoints = list(w.postgres.list_endpoints(parent=branch_full))
+    
+    # Wait for the endpoint host to be available
+    ep = endpoints[0]
+    if not ep.status or not ep.status.hosts or not ep.status.hosts.host:
+        print(f"⏳ Waiting for endpoint to become ready...")
         for i in range(wait_seconds // 10):
             time.sleep(10)
             endpoints = list(w.postgres.list_endpoints(parent=branch_full))
-            if endpoints:
+            ep = endpoints[0]
+            if ep.status and ep.status.hosts and ep.status.hosts.host:
                 break
             print(f"   Still waiting... ({(i+1)*10}s)")
     
-    if not endpoints:
-        raise Exception(f"No endpoint available for branch '{branch_id}' after {wait_seconds}s")
+    if not ep.status or not ep.status.hosts or not ep.status.hosts.host:
+        raise Exception(f"Endpoint not ready for branch '{branch_id}' after {wait_seconds}s")
     
-    ep = endpoints[0]
     host = ep.status.hosts.host
     
     # Generate OAuth token and connect
