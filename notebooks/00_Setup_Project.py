@@ -532,27 +532,78 @@ print("=" * 60)
 
 # COMMAND ----------
 
-# Close the connection
-conn.close()
+# MAGIC %md
+# MAGIC ## Helper: Connect to Any Branch
+# MAGIC
+# MAGIC This function is used by all scenario notebooks (01–05) to connect to a specific branch.
+# MAGIC It handles endpoint discovery, waiting, and OAuth token generation.
+
+# COMMAND ----------
+
+def connect_to_branch(branch_id, wait_seconds=300):
+    """
+    Connect to a Lakebase branch endpoint.
+    
+    Args:
+        branch_id: Branch name (e.g. "main", "dev-readonly", "feature/loyalty-tier")
+        wait_seconds: Max seconds to wait for endpoint (default 300)
+    
+    Returns:
+        tuple: (connection, host, endpoint_name)
+    """
+    branch_full = f"projects/{project_name}/branches/{branch_id}"
+    
+    # Find or wait for the endpoint
+    endpoints = list(w.postgres.list_endpoints(parent=branch_full))
+    if not endpoints:
+        print(f"⏳ Waiting for endpoint on branch '{branch_id}'...")
+        for i in range(wait_seconds // 10):
+            time.sleep(10)
+            endpoints = list(w.postgres.list_endpoints(parent=branch_full))
+            if endpoints:
+                break
+            print(f"   Still waiting... ({(i+1)*10}s)")
+    
+    if not endpoints:
+        raise Exception(f"No endpoint available for branch '{branch_id}' after {wait_seconds}s")
+    
+    ep = endpoints[0]
+    host = ep.status.hosts.host
+    
+    # Generate OAuth token and connect
+    cred = w.postgres.generate_database_credential(endpoint=ep.name)
+    branch_conn = psycopg2.connect(
+        host=host,
+        port=5432,
+        dbname="databricks_postgres",
+        user=db_user,
+        password=cred.token,
+        sslmode="require"
+    )
+    branch_conn.autocommit = True
+    
+    print(f"✅ Connected to branch '{branch_id}'")
+    print(f"   Host: {host}")
+    return branch_conn, host, ep.name
+
+print("🔧 connect_to_branch() helper defined — available for all scenario notebooks.")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 🎯 What's Next
+# MAGIC ## ✅ Setup Complete
 # MAGIC
-# MAGIC Your Lakebase project is set up and seeded with data. Here's what to run next:
+# MAGIC **Available variables for scenario notebooks** (via `%run ./00_Setup_Project`):
 # MAGIC
-# MAGIC | Notebook | Scenario | What You'll Learn |
-# MAGIC |---|---|---|
-# MAGIC | **`01_Scenario_Data_Only`** | Prod data in dev (no schema changes) | Copy-on-write branching, data isolation |
-# MAGIC | **`02_Scenario_Schema_To_Prod`** | Schema changes → production | Migration validation, promotion workflow |
-# MAGIC | **`03_Scenario_Concurrent`** | Production drifted mid-development | Conflict detection, rebase pattern |
-# MAGIC | **`04_Scenario_Point_In_Time`** | Point-in-time recovery | Instant rollback via time-travel branching |
-# MAGIC | **`05_Scenario_CICD_Ephemeral`** | CI/CD ephemeral branches | Auto-expiration, TTL management |
-# MAGIC
-# MAGIC ### Important
-# MAGIC - Keep **`project_name`** consistent across all notebooks
-# MAGIC - Authentication uses **OAuth tokens** — no passwords to remember
-# MAGIC - Scenarios 1 and 5 are standalone; Scenarios 3 and 4 require Scenario 2 first
-# MAGIC
-# MAGIC > 📖 **Full plan**: See `TECHNICAL_PLAN.md` in the repo for the complete architecture.
+# MAGIC | Variable | Description |
+# MAGIC |---|---|
+# MAGIC | `w` | `WorkspaceClient` (authenticated) |
+# MAGIC | `project_name` | Lakebase project name |
+# MAGIC | `db_user` | Current user's email |
+# MAGIC | `db_schema` | PostgreSQL schema (`ecommerce`) |
+# MAGIC | `conn` | Connection to `main` branch |
+# MAGIC | `main_branch_name` | Full name of the main branch |
+# MAGIC | `main_endpoint_name` | Full name of the main endpoint |
+# MAGIC | `main_host` | Hostname of the main endpoint |
+# MAGIC | `lakebase_url` | Lakebase UI link |
+# MAGIC | `connect_to_branch()` | Helper to connect to any branch |
