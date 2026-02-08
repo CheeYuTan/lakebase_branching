@@ -9,7 +9,7 @@
 # MAGIC ## What This Notebook Does
 # MAGIC 1. Creates a new Lakebase project with autoscaling compute
 # MAGIC 2. Waits for the project to become active
-# MAGIC 3. Creates a database role with OAuth authentication (fully automated)
+# MAGIC 3. Connects via OAuth token authentication (fully automated)
 # MAGIC 4. Seeds 4 tables with realistic e-commerce data
 # MAGIC 5. Verifies everything is ready
 # MAGIC
@@ -213,61 +213,29 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 3: Create a Database Role & Connect
+# MAGIC ## Step 3: Connect to the Database
 # MAGIC
 # MAGIC Lakebase supports **OAuth token-based authentication** — your Databricks identity is used
 # MAGIC to generate short-lived database tokens. No passwords to manage!
 # MAGIC
 # MAGIC **How it works:**
-# MAGIC 1. We create a role linked to your Databricks identity via the SDK
-# MAGIC 2. The SDK generates an OAuth token using `generate_database_credential`
-# MAGIC 3. We connect via `psycopg2` using the token as the password
+# MAGIC 1. The SDK generates an OAuth token using `generate_database_credential`
+# MAGIC 2. We connect via `psycopg2` using the token as the password
+# MAGIC 3. Your Databricks identity is automatically mapped to a PostgreSQL role
 # MAGIC
 # MAGIC > 💡 **Token lifetime**: Tokens auto-expire, so they're generated fresh each time.
 # MAGIC > This is more secure than static passwords and fully automated.
-
-# COMMAND ----------
-
-from databricks.sdk.service.postgres import Role, RoleRoleSpec, RoleAuthMethod, RoleIdentityType
-
-# Get current user identity
-current_user = w.current_user.me()
-username = current_user.user_name
-print(f"👤 Current user: {username}")
-
-# Create an OAuth-based role mapped to the current user
-role_id = username.split("@")[0].replace(".", "_")  # e.g. "steven_tan"
-print(f"🔄 Creating role '{role_id}' with OAuth authentication...")
-
-try:
-    role_result = w.postgres.create_role(
-        parent=f"projects/{project_name}",
-        role=Role(spec=RoleRoleSpec(
-            auth_method=RoleAuthMethod.LAKEBASE_OAUTH_V1,
-            identity_type=RoleIdentityType.USER,
-            postgres_role=role_id,
-        )),
-        role_id=role_id
-    ).wait()
-    print(f"✅ Role '{role_id}' created successfully!")
-except Exception as e:
-    if "already exists" in str(e).lower():
-        print(f"ℹ️  Role '{role_id}' already exists — reusing it.")
-    else:
-        print(f"❌ Error creating role: {e}")
-        raise
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Connect to the database
 # MAGIC
-# MAGIC Now we generate an OAuth token and connect via `psycopg2`. This token acts as the
-# MAGIC password — no manual credential management needed.
+# MAGIC > 📖 **Docs**: [Query with Python in notebooks](https://docs.databricks.com/aws/en/oltp/projects/notebooks-python)
 
 # COMMAND ----------
 
 import psycopg2
+
+# Get current user identity
+current_user = w.current_user.me()
+db_user = current_user.user_name
+print(f"👤 Current user: {db_user}")
 
 # Generate a fresh OAuth token
 cred = w.postgres.generate_database_credential(endpoint=main_endpoint_name)
@@ -280,7 +248,7 @@ try:
         host=main_host,
         port=5432,
         dbname="postgres",
-        user=role_id,
+        user=db_user,
         password=db_token,
         sslmode="require"
     )
@@ -293,12 +261,13 @@ try:
     print(f"✅ Connected to Lakebase!")
     print(f"   PostgreSQL: {version[:60]}...")
     print(f"   Host: {main_host}")
-    print(f"   User: {role_id}")
+    print(f"   User: {db_user}")
 except Exception as e:
     print(f"❌ Connection failed: {e}")
     print(f"\n   Troubleshooting:")
     print(f"   1. Is the endpoint active? Check the Lakebase UI.")
     print(f"   2. Does your user have permissions on this project?")
+    print(f"   3. Check the Lakebase UI → Roles tab to verify your role exists.")
     raise
 
 # COMMAND ----------
