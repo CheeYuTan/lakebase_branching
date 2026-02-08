@@ -181,6 +181,10 @@ with feature_conn.cursor() as cur:
 # MAGIC 3. Click the **Schema diff** button to see the differences vs production
 # MAGIC
 # MAGIC > 📖 **Docs**: [Compare branch schemas](https://docs.databricks.com/aws/en/oltp/projects/manage-branches#compare-branch-schemas)
+# MAGIC
+# MAGIC Here's an example of what the Schema Diff looks like:
+# MAGIC
+# MAGIC ![Schema Comparison](/Workspace/Users/steven.tan@databricks.com/lakebase_branching/Compare_Schema.png)
 
 # COMMAND ----------
 
