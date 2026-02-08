@@ -49,7 +49,8 @@ import hashlib
 import time as time_module
 from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
 
-# Simulated PRs
+# Simulated PRs — each has a migration + a test assertion
+# Test logic: query returns a count, test passes if count > 0
 PULL_REQUESTS = [
     {
         "pr_number": 42,
@@ -59,17 +60,17 @@ PULL_REQUESTS = [
             ADD COLUMN IF NOT EXISTS loyalty_tier VARCHAR(20) DEFAULT 'bronze';
         """,
         "test_query": f"SELECT COUNT(*) FROM {db_schema}.customers WHERE loyalty_tier IS NOT NULL",
-        "expected_pass": True
     },
     {
         "pr_number": 43,
-        "title": "Add invalid column type",
+        "title": "Add order priority (missing backfill)",
         "migration": f"""
             ALTER TABLE {db_schema}.orders
             ADD COLUMN IF NOT EXISTS priority VARCHAR(10) DEFAULT 'normal';
         """,
-        "test_query": f"SELECT COUNT(*) FROM {db_schema}.orders WHERE priority = 'invalid_status'",
-        "expected_pass": False  # Simulated failure: no rows match
+        # BUG: migration sets default 'normal' but doesn't backfill high-value orders.
+        # Test checks that high-value orders have priority='high' — they don't → FAIL
+        "test_query": f"SELECT COUNT(*) FROM {db_schema}.orders WHERE total > 500 AND priority = 'high'",
     },
     {
         "pr_number": 44,
@@ -78,10 +79,9 @@ PULL_REQUESTS = [
             ALTER TABLE {db_schema}.products
             ADD COLUMN IF NOT EXISTS avg_rating DECIMAL(3,2) DEFAULT 0.00;
 
-            UPDATE {db_schema}.products SET avg_rating = ROUND(RANDOM() * 4 + 1, 2);
+            UPDATE {db_schema}.products SET avg_rating = ROUND((RANDOM() * 4 + 1)::numeric, 2);
         """,
         "test_query": f"SELECT COUNT(*) FROM {db_schema}.products WHERE avg_rating BETWEEN 1.0 AND 5.0",
-        "expected_pass": True
     }
 ]
 
@@ -175,11 +175,8 @@ for pr in PULL_REQUESTS:
             cur.execute(pr['test_query'])
             test_result = cur.fetchone()[0]
         
-        # Evaluate
-        if pr['expected_pass']:
-            passed = test_result > 0
-        else:
-            passed = test_result == 0  # Expected to find no matching rows
+        # Evaluate: test passes if query returns > 0 rows
+        passed = test_result > 0
         
         status = "✅ PASSED" if passed else "❌ FAILED"
         print(f"  {status} (result: {test_result} rows)")
