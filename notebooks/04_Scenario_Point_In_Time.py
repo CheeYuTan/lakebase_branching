@@ -136,7 +136,7 @@ print(f"🔄 Creating recovery branch from timestamp: {safe_timestamp.isoformat(
 branch_result = w.postgres.create_branch(
     parent=f"projects/{project_name}",
     branch=Branch(spec=BranchSpec(
-        source_branch=f"projects/{project_name}/branches/production",
+        source_branch=prod_branch_name,
         source_branch_time=pb_ts,
         ttl=Duration(seconds=86400)  # 24-hour TTL
     )),

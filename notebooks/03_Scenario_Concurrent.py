@@ -63,7 +63,7 @@ print(f"\n🔄 Creating branch '{BRANCH_NAME}' from production...")
 w.postgres.create_branch(
     parent=f"projects/{project_name}",
     branch=Branch(spec=BranchSpec(
-        source_branch=f"projects/{project_name}/branches/production",
+        source_branch=prod_branch_name,
         ttl=Duration(seconds=172800)  # 48-hour TTL
     )),
     branch_id=BRANCH_NAME
@@ -202,7 +202,7 @@ print(f"🔄 Creating '{BRANCH_NAME_V2}' from current production (with other tea
 w.postgres.create_branch(
     parent=f"projects/{project_name}",
     branch=Branch(spec=BranchSpec(
-        source_branch=f"projects/{project_name}/branches/production",
+        source_branch=prod_branch_name,
         ttl=Duration(seconds=172800)
     )),
     branch_id=BRANCH_NAME_V2

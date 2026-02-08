@@ -65,7 +65,7 @@ print(f"🔄 Creating branch '{BRANCH_NAME}' from production...")
 branch_result = w.postgres.create_branch(
     parent=f"projects/{project_name}",
     branch=Branch(spec=BranchSpec(
-        source_branch=f"projects/{project_name}/branches/production",
+        source_branch=prod_branch_name,
         ttl=Duration(seconds=604800)  # 7-day TTL
     )),
     branch_id=BRANCH_NAME

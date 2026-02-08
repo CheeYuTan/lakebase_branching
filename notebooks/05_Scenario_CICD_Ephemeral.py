@@ -124,7 +124,7 @@ for pr in PULL_REQUESTS:
     w.postgres.create_branch(
         parent=f"projects/{project_name}",
         branch=Branch(spec=BranchSpec(
-            source_branch=f"projects/{project_name}/branches/production",
+            source_branch=prod_branch_name,
             ttl=Duration(seconds=TTL_SECONDS)
         )),
         branch_id=branch_name
