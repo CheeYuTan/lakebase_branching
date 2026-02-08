@@ -11,7 +11,7 @@
 # MAGIC ## What This Notebook Does
 # MAGIC 1. Creates a new Lakebase project with autoscaling compute
 # MAGIC 2. Waits for the project to become active
-# MAGIC 3. Guides you to create a database role (for `psycopg2` connections)
+# MAGIC 3. Creates a database role with OAuth authentication (fully automated)
 # MAGIC 4. Seeds 4 tables with realistic e-commerce data
 # MAGIC 5. Verifies everything is ready
 # MAGIC
@@ -56,7 +56,6 @@ dbutils.library.restartPython()
 # MAGIC | `min_cu` | Minimum compute units (0.5 = smallest, cost-effective for demos) |
 # MAGIC | `max_cu` | Maximum compute units (4.0 = enough for realistic workloads) |
 # MAGIC | `suspend_timeout_seconds` | Auto-suspend idle compute after N seconds (60 = aggressive, saves cost) |
-# MAGIC | `db_password` | Password for the database role you'll create in Step 3 |
 
 # COMMAND ----------
 
@@ -64,7 +63,6 @@ dbutils.widgets.text("project_name", "lakebase-branching-demo", "1. Project Name
 dbutils.widgets.text("min_cu", "0.5", "2. Min Compute Units")
 dbutils.widgets.text("max_cu", "4.0", "3. Max Compute Units")
 dbutils.widgets.text("suspend_timeout_seconds", "60", "4. Suspend Timeout (sec)")
-dbutils.widgets.text("db_password", "", "5. Database Password")
 
 # COMMAND ----------
 
@@ -73,14 +71,12 @@ project_name = dbutils.widgets.get("project_name")
 min_cu = float(dbutils.widgets.get("min_cu"))
 max_cu = float(dbutils.widgets.get("max_cu"))
 suspend_timeout_seconds = int(dbutils.widgets.get("suspend_timeout_seconds"))
-db_password = dbutils.widgets.get("db_password")
 
 print("📋 Configuration:")
 print(f"   Project Name:      {project_name}")
 print(f"   Min CU:            {min_cu}")
 print(f"   Max CU:            {max_cu}")
 print(f"   Suspend Timeout:   {suspend_timeout_seconds}s")
-print(f"   DB Password:       {'***' if db_password else '⚠️  NOT SET (set it after Step 3)'}")
 
 # COMMAND ----------
 
@@ -118,7 +114,7 @@ print(f"   Workspace: {w.config.host}")
 # COMMAND ----------
 
 from databricks.sdk.service.postgres import (
-    Project, ProjectSpec, ComputeSpec, Duration
+    Project, ProjectSpec, ProjectDefaultEndpointSettings, Duration
 )
 
 # Check if the project already exists
@@ -139,7 +135,7 @@ else:
         project=Project(spec=ProjectSpec(
             display_name=project_name,
             pg_version=17,
-            default_compute_spec=ComputeSpec(
+            default_endpoint_settings=ProjectDefaultEndpointSettings(
                 autoscaling_limit_min_cu=min_cu,
                 autoscaling_limit_max_cu=max_cu,
                 suspend_timeout_duration=Duration(seconds=suspend_timeout_seconds)
@@ -168,113 +164,133 @@ branches = list(w.postgres.list_branches(parent=f"projects/{project_name}"))
 print(f"📋 Branches in '{project_name}':")
 for b in branches:
     branch_id = b.name.split("/branches/")[-1]
-    is_default = "⭐ default" if b.spec.is_default else ""
+    is_default = "⭐ default" if b.status and b.status.default else ""
     print(f"   • {branch_id} {is_default}")
 
-# Get the main branch
-main_branch = next((b for b in branches if b.spec.is_default), branches[0])
+# Get the main branch (the default one, or fallback to the first)
+main_branch = next(
+    (b for b in branches if b.status and b.status.default),
+    branches[0]
+)
 main_branch_name = main_branch.name
 print(f"\n✅ Main branch: {main_branch_name}")
 
 # COMMAND ----------
 
 # Get the compute endpoint for the main branch
-computes = list(w.postgres.list_computes(parent=main_branch_name))
+endpoints = list(w.postgres.list_endpoints(parent=main_branch_name))
 
-if not computes:
+if not endpoints:
     print("⏳ Compute endpoint not ready yet. Waiting...")
     for i in range(30):
         time.sleep(10)
-        computes = list(w.postgres.list_computes(parent=main_branch_name))
-        if computes:
+        endpoints = list(w.postgres.list_endpoints(parent=main_branch_name))
+        if endpoints:
             break
         print(f"   Still waiting... ({(i+1)*10}s)")
 
-if computes:
-    main_host = computes[0].status.host
+if endpoints:
+    main_endpoint = endpoints[0]
+    main_endpoint_name = main_endpoint.name
+    main_host = main_endpoint.status.hosts.host
     print(f"✅ Compute endpoint ready!")
+    print(f"   Endpoint: {main_endpoint_name}")
     print(f"   Host: {main_host}")
     print(f"   Port: 5432")
     print(f"   Database: postgres")
 else:
-    print("❌ Compute endpoint not available after 5 minutes.")
-    print("   Check the Lakebase UI for project status.")
+    raise Exception("Compute endpoint not available after 5 minutes. Check the Lakebase UI for project status.")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 3: Create a Database Role
+# MAGIC ## Step 3: Create a Database Role & Connect
 # MAGIC
-# MAGIC To connect via `psycopg2`, you need a PostgreSQL role with a password.
+# MAGIC Lakebase supports **OAuth token-based authentication** — your Databricks identity is used
+# MAGIC to generate short-lived database tokens. No passwords to manage!
 # MAGIC
-# MAGIC ### 👉 Do this in the Lakebase UI:
+# MAGIC **How it works:**
+# MAGIC 1. We create a role linked to your Databricks identity via the SDK
+# MAGIC 2. The SDK generates an OAuth token using `generate_database_credential`
+# MAGIC 3. We connect via `psycopg2` using the token as the password
 # MAGIC
-# MAGIC 1. Go to your Databricks workspace → **Lakebase** (left sidebar)
-# MAGIC 2. Click on your project (`lakebase-branching-demo`)
-# MAGIC 3. Go to the **Roles** tab
-# MAGIC 4. Click **Create Role**
-# MAGIC 5. Enter a role name (e.g., `demo_user`)
-# MAGIC 6. Set a password
-# MAGIC 7. Grant **superuser** privileges (for the demo, we need full DDL access)
-# MAGIC
-# MAGIC ### After creating the role:
-# MAGIC 1. Copy the password
-# MAGIC 2. Paste it into the **`db_password`** widget at the top of this notebook
-# MAGIC 3. Also note the **role name** — you'll use it below
-# MAGIC
-# MAGIC > 💡 **Why can't we automate this?** Lakebase role creation with passwords
-# MAGIC > currently requires the UI. The SDK handles branch/project management,
-# MAGIC > but password-based role creation is done through the UI for security.
-# MAGIC
-# MAGIC > ⚠️ **Don't skip this step!** All scenario notebooks (01–05) need the
-# MAGIC > `db_password` widget to connect to branches.
+# MAGIC > 💡 **Token lifetime**: Tokens auto-expire, so they're generated fresh each time.
+# MAGIC > This is more secure than static passwords and fully automated.
+
+# COMMAND ----------
+
+from databricks.sdk.service.postgres import Role, RoleRoleSpec, RoleAuthMethod, RoleIdentityType
+
+# Get current user identity
+current_user = w.current_user.me()
+username = current_user.user_name
+print(f"👤 Current user: {username}")
+
+# Create an OAuth-based role mapped to the current user
+role_id = username.split("@")[0].replace(".", "_")  # e.g. "steven_tan"
+print(f"🔄 Creating role '{role_id}' with OAuth authentication...")
+
+try:
+    role_result = w.postgres.create_role(
+        parent=f"projects/{project_name}",
+        role=Role(spec=RoleRoleSpec(
+            auth_method=RoleAuthMethod.LAKEBASE_OAUTH_V1,
+            identity_type=RoleIdentityType.USER,
+            postgres_role=role_id,
+        )),
+        role_id=role_id
+    ).wait()
+    print(f"✅ Role '{role_id}' created successfully!")
+except Exception as e:
+    if "already exists" in str(e).lower():
+        print(f"ℹ️  Role '{role_id}' already exists — reusing it.")
+    else:
+        print(f"❌ Error creating role: {e}")
+        raise
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Verify your connection
+# MAGIC ### Connect to the database
 # MAGIC
-# MAGIC Once you've created the role and set the `db_password` widget above,
-# MAGIC run the cell below to test the connection.
-# MAGIC
-# MAGIC If `db_password` is empty, this cell will remind you to set it.
+# MAGIC Now we generate an OAuth token and connect via `psycopg2`. This token acts as the
+# MAGIC password — no manual credential management needed.
 
 # COMMAND ----------
 
 import psycopg2
 
-db_password = dbutils.widgets.get("db_password")
+# Generate a fresh OAuth token
+cred = w.postgres.generate_database_credential(endpoint=main_endpoint_name)
+db_token = cred.token
+print(f"🔑 OAuth token generated (expires: {cred.expire_time})")
 
-if not db_password:
-    print("⚠️  db_password widget is empty!")
-    print("   → Create a role in the Lakebase UI (see Step 3 above)")
-    print("   → Paste the password into the 'db_password' widget")
-    print("   → Re-run this cell")
-else:
-    try:
-        conn = psycopg2.connect(
-            host=main_host,
-            port=5432,
-            dbname="postgres",
-            user="demo_user",
-            password=db_password
-        )
-        conn.autocommit = True
+# Connect to the database
+try:
+    conn = psycopg2.connect(
+        host=main_host,
+        port=5432,
+        dbname="postgres",
+        user=role_id,
+        password=db_token,
+        sslmode="require"
+    )
+    conn.autocommit = True
 
-        with conn.cursor() as cur:
-            cur.execute("SELECT version();")
-            version = cur.fetchone()[0]
+    with conn.cursor() as cur:
+        cur.execute("SELECT version();")
+        version = cur.fetchone()[0]
 
-        print(f"✅ Connected to Lakebase!")
-        print(f"   PostgreSQL: {version[:60]}...")
-        print(f"   Host: {main_host}")
-        print(f"   User: demo_user")
-    except Exception as e:
-        print(f"❌ Connection failed: {e}")
-        print(f"\n   Troubleshooting:")
-        print(f"   1. Did you create the role 'demo_user' in the Lakebase UI?")
-        print(f"   2. Is the password correct?")
-        print(f"   3. If you used a different role name, update the 'user' parameter above.")
+    print(f"✅ Connected to Lakebase!")
+    print(f"   PostgreSQL: {version[:60]}...")
+    print(f"   Host: {main_host}")
+    print(f"   User: {role_id}")
+except Exception as e:
+    print(f"❌ Connection failed: {e}")
+    print(f"\n   Troubleshooting:")
+    print(f"   1. Is the endpoint active? Check the Lakebase UI.")
+    print(f"   2. Does your user have permissions on this project?")
+    raise
 
 # COMMAND ----------
 
@@ -567,8 +583,8 @@ conn.close()
 # MAGIC | **`05_Scenario_CICD_Ephemeral`** | CI/CD ephemeral branches | Auto-expiration, TTL management |
 # MAGIC
 # MAGIC ### Important
-# MAGIC - Keep **`project_name`** = `{project_name}` consistent across all notebooks
-# MAGIC - Keep **`db_password`** the same password you set in Step 3
+# MAGIC - Keep **`project_name`** consistent across all notebooks
+# MAGIC - Authentication uses **OAuth tokens** — no passwords to remember
 # MAGIC - Scenarios 1 and 5 are standalone; Scenarios 3 and 4 require Scenario 2 first
 # MAGIC
 # MAGIC > 📖 **Full plan**: See `TECHNICAL_PLAN.md` in the repo for the complete architecture.
