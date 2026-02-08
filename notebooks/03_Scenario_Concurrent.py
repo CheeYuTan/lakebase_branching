@@ -291,8 +291,12 @@ print(f"\n🎉 Production has both teams' changes!")
 
 # MAGIC %md
 # MAGIC ## Step 8: Cleanup
+# MAGIC
+# MAGIC > ⚠️ **This cell is skipped by default.** Remove `%skip` below to delete the branches now.
 
 # COMMAND ----------
+
+# MAGIC %skip
 
 feature_conn.close()
 feature_conn_v2.close()

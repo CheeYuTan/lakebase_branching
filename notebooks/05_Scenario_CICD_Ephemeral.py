@@ -259,14 +259,17 @@ print(f"\n✅ Production is completely untouched!")
 # MAGIC ## Step 6: Cleanup (or Let TTL Handle It)
 # MAGIC
 # MAGIC In a real CI/CD pipeline, you'd let the TTL auto-expire the branches.
-# MAGIC But we'll clean up explicitly for this demo.
 # MAGIC
 # MAGIC > 💡 **TTL in practice**: Set TTL to match your CI run time + buffer.
 # MAGIC > - Quick tests: 1 hour
 # MAGIC > - Nightly builds: 12 hours
 # MAGIC > - Staging environments: 7 days
+# MAGIC
+# MAGIC > ⚠️ **This cell is skipped by default.** Remove `%skip` below to delete the branches now.
 
 # COMMAND ----------
+
+# MAGIC %skip
 
 for pr_num, branch_name in ci_branches.items():
     try:

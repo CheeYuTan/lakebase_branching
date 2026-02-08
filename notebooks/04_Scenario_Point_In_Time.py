@@ -269,8 +269,12 @@ else:
 
 # MAGIC %md
 # MAGIC ## Step 7: Cleanup
+# MAGIC
+# MAGIC > ⚠️ **This cell is skipped by default.** Remove `%skip` below to delete the recovery branch now.
 
 # COMMAND ----------
+
+# MAGIC %skip
 
 recovery_conn.close()
 

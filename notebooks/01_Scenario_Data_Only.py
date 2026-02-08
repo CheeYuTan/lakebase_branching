@@ -161,12 +161,16 @@ print(f"✅ Data isolation confirmed — branch changes don't affect production!
 # MAGIC %md
 # MAGIC ## Step 5: Cleanup — Delete the Branch
 # MAGIC
-# MAGIC We set a 24-hour TTL, so the branch would auto-delete. But let's clean up explicitly.
+# MAGIC We set a 24-hour TTL, so the branch will auto-delete. You can also delete it explicitly.
 # MAGIC
 # MAGIC > 💡 **In practice**: TTL is useful for dev/test branches that developers might forget about.
 # MAGIC > Lakebase ensures they don't linger and consume resources.
+# MAGIC
+# MAGIC > ⚠️ **This cell is skipped by default.** Remove `%skip` below to delete the branch now.
 
 # COMMAND ----------
+
+# MAGIC %skip
 
 # Close the branch connection first
 dev_conn.close()

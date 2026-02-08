@@ -228,9 +228,13 @@ print(f"\n🎉 Schema change successfully promoted to production!")
 # MAGIC %md
 # MAGIC ## Step 7: Cleanup — Delete the Feature Branch
 # MAGIC
-# MAGIC The feature branch has served its purpose (validation). We can safely delete it.
+# MAGIC The feature branch has served its purpose. You can safely delete it, or let TTL handle it.
+# MAGIC
+# MAGIC > ⚠️ **This cell is skipped by default.** Remove `%skip` below to delete the branch now.
 
 # COMMAND ----------
+
+# MAGIC %skip
 
 feature_conn.close()
 
